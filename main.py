@@ -5,6 +5,7 @@ from services import calculate_stress, supply_chain_decision
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
+import os
 
 # ML imports
 from ml_model import predict_future_stress, detect_anomaly
@@ -23,16 +24,21 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------
-# EMAIL CONFIG
+# EMAIL CONFIG  (use environment variables for cloud)
 # ---------------------------------------------------
-SENDER_EMAIL = "askarnasar3@gmail.com"
-SENDER_PASSWORD = "tkqujvpddjtftpjk"
-RECEIVER_EMAIL = "jerryhyden2005@gmail.com"
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 
 # ---------------------------------------------------
 # EMAIL FUNCTION
 # ---------------------------------------------------
 def send_email_alert(zone_name, alert_message, yield_drop, insurance_risk):
+
+    # If email is not configured (safe for cloud)
+    if not SENDER_EMAIL or not SENDER_PASSWORD or not RECEIVER_EMAIL:
+        print("⚠️ Email credentials not configured. Skipping email.")
+        return
 
     subject = f"🚨 Marine Alert: {zone_name}"
 
@@ -61,6 +67,7 @@ Triggered At: {datetime.utcnow()}
         print("✅ Email sent successfully")
     except Exception as e:
         print("❌ Email sending failed:", e)
+
 
 # ---------------------------------------------------
 # ECONOMIC ALERT ENGINE
@@ -91,6 +98,7 @@ def economic_alert_engine(stress_score: float):
             "insurance_risk": "Elevated"
         }
 
+
 # ---------------------------------------------------
 # EXECUTIVE SUMMARY GENERATOR
 # ---------------------------------------------------
@@ -107,12 +115,14 @@ def generate_executive_summary(zone_name, risk_score, anomaly_flag):
 
     return f"{zone_name} is currently stable with low marine risk."
 
+
 # ---------------------------------------------------
 # GET ALL ZONES
 # ---------------------------------------------------
 @app.get("/zones")
 def get_zones():
     return zones
+
 
 # ---------------------------------------------------
 # GET SUPPLY CHAIN WITH STABLE INTELLIGENCE
@@ -132,11 +142,9 @@ def get_supply_chain():
         stress_score, stress_level = calculate_stress(zone)
 
         # -------------------------
-        # Safe ML Prediction
+        # ML Prediction
         # -------------------------
         predicted_stress = predict_future_stress(zone)
-
-        # Clamp prediction
         predicted_stress = max(0, min(predicted_stress, 120))
 
         # -------------------------
@@ -150,8 +158,6 @@ def get_supply_chain():
         # -------------------------
         # Email Trigger
         # -------------------------
-        # if zone.get("current_ph", 8.1) <= 7.7:
-        #     global_alert_flag = True
         if zone.get("current_ph", 8.1) <= 7.7:
             global_alert_flag = True
             send_email_alert(
@@ -159,7 +165,7 @@ def get_supply_chain():
                 alert["message"],
                 alert["yield_drop_percent"],
                 alert["insurance_risk"]
-    )
+            )
 
         # -------------------------
         # AI Warning
@@ -167,7 +173,7 @@ def get_supply_chain():
         ai_warning = predicted_stress >= 50
 
         # -------------------------
-        # Composite Risk Score (Balanced)
+        # Composite Risk Score
         # -------------------------
         anomaly_weight = 15 if anomaly_flag else 0
 
@@ -188,7 +194,7 @@ def get_supply_chain():
         )
 
         # -------------------------
-        # Stress Trend (Stable Simulation)
+        # Stress Trend
         # -------------------------
         stress_trend = [
             round(max(stress_score - 15, 0), 2),
@@ -198,7 +204,7 @@ def get_supply_chain():
         ]
 
         # -------------------------
-        # Confidence Score (Stable)
+        # Confidence Score
         # -------------------------
         confidence_score = 100 - abs(predicted_stress - stress_score)
         confidence_score = round(min(max(confidence_score, 50), 100), 2)
@@ -251,6 +257,7 @@ def get_supply_chain():
         "zones": results
     }
 
+
 # ---------------------------------------------------
 # SIMULATE pH DROP
 # ---------------------------------------------------
@@ -266,6 +273,11 @@ def simulate_drop(zone_id: int, drop_value: float):
             return {"message": "pH updated successfully"}
 
     raise HTTPException(status_code=404, detail="Zone not found")
+
+
+# ---------------------------------------------------
+# ROOT
+# ---------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "BlueSignal Marine Intelligence API Running"}
